@@ -1,17 +1,21 @@
-const path = require('path');
-const HtmlWebpackPlugin = require('html-webpack-plugin');
-const CopyWebpackPlugin = require('copy-webpack-plugin');
-const webpack = require('webpack');
-const dotenv = require('dotenv');
+import path from 'path';
+import { fileURLToPath } from 'url';
+import HtmlWebpackPlugin from 'html-webpack-plugin';
+import CopyWebpackPlugin from 'copy-webpack-plugin';
+import webpack from 'webpack';
+import dotenv from 'dotenv';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Load environment variables
 const env = dotenv.config({ path: '.env.local' }).parsed || dotenv.config().parsed || {};
 
-module.exports = {
+export default {
   entry: {
     popup: './src/index.js',
     background: './src/background.js',
-    content: './src/content.js'
+    content: './src/contentWithAuth.js'
   },
   output: {
     path: path.resolve(__dirname, 'dist'),

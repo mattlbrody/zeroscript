@@ -27,7 +27,12 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": [
+        "https://app.freedomcreditrepair.com/*",
+        "https://www.identityiq.com/*",
+        "https://www.smartcredit.com/*",
+        "https://www.creditheroscore.com/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
