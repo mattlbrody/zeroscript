@@ -34,3 +34,33 @@ Zeroscript is a real-time sales coaching platform designed to codify the pattern
 - **IMPORTANT**: For any new feature or component, you **MUST** create a step-by-step plan for how you will implement it first. Do not write any code until this plan has been approved.
 - Use the `gh` CLI for any GitHub-related tasks, such as creating pull requests.
 - When creating git commits, write descriptive commit messages that explain the changes made.
+
+## 6. SQL Schema
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.playbook (
+  id bigint NOT NULL DEFAULT nextval('playbook_id_seq'::regclass),
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  intent_name text NOT NULL,
+  script text NOT NULL,
+  embedding USER-DEFINED NOT NULL,
+  category text,
+  stage integer,
+  is_active boolean DEFAULT true,
+  usage_count integer DEFAULT 0,
+  representative_phrase text,
+  CONSTRAINT playbook_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.sessions (
+  id bigint NOT NULL DEFAULT nextval('sessions_id_seq'::regclass),
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  phone_number text NOT NULL,
+  last_stage integer DEFAULT 0,
+  agent_id uuid NOT NULL,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  session_notes text,
+  is_active boolean DEFAULT true,
+  CONSTRAINT sessions_pkey PRIMARY KEY (id),
+  CONSTRAINT sessions_agent_id_fkey FOREIGN KEY (agent_id) REFERENCES auth.users(id)
+);
