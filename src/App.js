@@ -1,7 +1,7 @@
 import React from 'react';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import Auth from './components/Auth';
-import MainApp from './components/MainApp';
+import { AuthProvider, useAuth } from './context/AuthContext.js';
+import Auth from './components/Auth.js';
+import MainApp from './components/MainApp.js';
 import './App.css';
 
 function AppContent() {

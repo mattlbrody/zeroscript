@@ -47,6 +47,8 @@
 .floating-widget.expanded {
   width: 400px;
   height: 500px;
+  display: flex;
+  flex-direction: column;
 }
 
 .widget-expanded {
@@ -148,25 +150,63 @@
 /* Widget Body */
 .widget-body {
   flex: 1;
-  background: #f8f9fa;
+  background: white;
   border-radius: 0 0 8px 8px;
-  overflow-y: auto;
+  overflow: hidden;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
-.widget-content {
-  padding: 20px;
-  color: #333;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.widget-content-wrapper {
+  padding: 15px;
   height: 100%;
-  text-align: center;
-  background: white;
-  margin: 15px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.widget-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+  width: 100%;
+}
+
+.diagnosis-trigger-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
   border-radius: 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.diagnosis-trigger-button:hover {
+  background: linear-gradient(135deg, #7c8ff0 0%, #8657af 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.test-toggle-button {
+  background: #e5e7eb;
+  color: #374151;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.test-toggle-button:hover {
+  background: #d1d5db;
 }
 
 /* Animations */

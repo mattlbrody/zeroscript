@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './FloatingWidget.css';
-import ScriptWindow from './ScriptWindow';
+import ScriptWindow from './ScriptWindow.js';
+import GuidedDiagnosis from './GuidedDiagnosis.js';
 
 const FloatingWidget = () => {
   const [isCollapsed, setIsCollapsed] = useState(true);
@@ -8,6 +9,8 @@ const FloatingWidget = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [showSampleScript, setShowSampleScript] = useState(true);
+  const [showDiagnosis, setShowDiagnosis] = useState(false);
+  const [currentScript, setCurrentScript] = useState("");
   const widgetRef = useRef(null);
 
   // Load saved position from localStorage on mount
@@ -90,6 +93,17 @@ const FloatingWidget = () => {
     }));
   };
 
+  // Handle script update from diagnosis
+  const handleScriptUpdate = (script) => {
+    setCurrentScript(script);
+    setShowSampleScript(false);
+  };
+
+  // Handle diagnosis completion
+  const handleDiagnosisComplete = () => {
+    setShowDiagnosis(false);
+  };
+
   return (
     <div
       ref={widgetRef}
@@ -115,7 +129,7 @@ const FloatingWidget = () => {
           </div>
         </div>
       ) : (
-        // Expanded View
+        // Expanded View  
         <div className="widget-expanded">
           <div className="widget-header expanded-header">
             <div className="widget-logo">Zeroscript</div>
@@ -124,17 +138,36 @@ const FloatingWidget = () => {
             </button>
           </div>
           <div className="widget-body">
-            <div className="widget-content">
-              <ScriptWindow 
-                scriptText={showSampleScript ? "Hello! Thank you for calling. How can I assist you today?" : ""} 
+            {!showDiagnosis ? (
+              // Normal view with script and controls
+              <div className="widget-content-wrapper">
+                <ScriptWindow 
+                  scriptText={currentScript || (showSampleScript ? "Hello! Thank you for calling. How can I assist you today?" : "")} 
+                />
+                <div className="widget-controls">
+                  <button 
+                    className="diagnosis-trigger-button"
+                    onClick={() => setShowDiagnosis(true)}
+                  >
+                    Start Credit Diagnosis
+                  </button>
+                  <button 
+                    className="test-toggle-button"
+                    onClick={() => setShowSampleScript(!showSampleScript)}
+                  >
+                    Toggle Script (Testing)
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // Diagnosis view embedded in widget
+              <GuidedDiagnosis 
+                onScriptUpdate={handleScriptUpdate}
+                onComplete={handleDiagnosisComplete}
+                currentScript={currentScript}
+                embedded={true}
               />
-              <button 
-                onClick={() => setShowSampleScript(!showSampleScript)}
-                style={{ marginTop: '10px', padding: '5px 10px', cursor: 'pointer' }}
-              >
-                Toggle Script (Testing)
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}

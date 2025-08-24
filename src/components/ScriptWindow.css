@@ -3,6 +3,7 @@
   border-radius: 8px;
   padding: 20px;
   min-height: 120px;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;

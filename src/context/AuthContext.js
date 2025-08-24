@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
+import { supabase } from '../supabaseClient.js';
 
 const AuthContext = createContext({});
 
@@ -24,8 +24,16 @@ export const AuthProvider = ({ children }) => {
         async (event, session) => {
           if (session?.user) {
             setUser(session.user);
+            // Save user to Chrome storage for content script
+            if (chrome?.storage?.local) {
+              chrome.storage.local.set({ user: session.user });
+            }
           } else {
             setUser(null);
+            // Clear user from Chrome storage
+            if (chrome?.storage?.local) {
+              chrome.storage.local.remove('user');
+            }
           }
         }
       );
@@ -47,8 +55,16 @@ export const AuthProvider = ({ children }) => {
       
       if (session?.user) {
         setUser(session.user);
+        // Save user to Chrome storage for content script
+        if (chrome?.storage?.local) {
+          chrome.storage.local.set({ user: session.user });
+        }
       } else {
         setUser(null);
+        // Clear user from Chrome storage
+        if (chrome?.storage?.local) {
+          chrome.storage.local.remove('user');
+        }
       }
     } catch (error) {
       console.error('Error checking user session:', error);
@@ -69,6 +85,10 @@ export const AuthProvider = ({ children }) => {
       if (error) throw error;
       
       setUser(data.user);
+      // Save user to Chrome storage for content script
+      if (chrome?.storage?.local && data.user) {
+        chrome.storage.local.set({ user: data.user });
+      }
       return { user: data.user, error: null };
     } catch (error) {
       console.error('Error signing in:', error);
@@ -84,6 +104,10 @@ export const AuthProvider = ({ children }) => {
       if (error) throw error;
       
       setUser(null);
+      // Clear user from Chrome storage
+      if (chrome?.storage?.local) {
+        chrome.storage.local.remove('user');
+      }
     } catch (error) {
       console.error('Error signing out:', error);
       setError(error.message);

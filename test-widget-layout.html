@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Widget Layout Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+            background: #f0f0f0;
+        }
+        
+        .test-container {
+            margin-bottom: 40px;
+        }
+        
+        .widget-collapsed {
+            width: 280px;
+            height: 44px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            margin-bottom: 20px;
+        }
+        
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            height: 44px;
+            gap: 12px;
+        }
+        
+        .logo {
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            flex-shrink: 0;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1 1 auto;
+            justify-content: center;
+            min-width: 0;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #4ade80;
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+            flex-shrink: 0;
+        }
+        
+        .status-text {
+            font-size: 13px;
+            font-weight: 500;
+            opacity: 0.95;
+            white-space: nowrap;
+        }
+        
+        .chevron {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+        }
+        
+        .chevron-icon {
+            font-size: 18px;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.9);
+            display: block;
+            line-height: 1;
+        }
+        
+        .widget-collapsed:hover .chevron-icon {
+            transform: translateX(2px);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        .debug-info {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+        
+        .measurement {
+            display: inline-block;
+            padding: 2px 6px;
+            background: #e0e0e0;
+            border-radius: 3px;
+            margin: 0 5px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Zeroscript Widget Layout Test</h2>
+    
+    <div class="test-container">
+        <h3>Collapsed Widget View</h3>
+        <div class="widget-collapsed">
+            <div class="header">
+                <div class="logo">Zeroscript</div>
+                <div class="status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Listening</span>
+                </div>
+                <div class="chevron">
+                    <span class="chevron-icon">›</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="debug-info" id="measurements"></div>
+    </div>
+    
+    <script>
+        // Calculate and display measurements
+        const header = document.querySelector('.header');
+        const logo = document.querySelector('.logo');
+        const status = document.querySelector('.status');
+        const chevron = document.querySelector('.chevron');
+        const chevronIcon = document.querySelector('.chevron-icon');
+        
+        const headerRect = header.getBoundingClientRect();
+        const logoRect = logo.getBoundingClientRect();
+        const statusRect = status.getBoundingClientRect();
+        const chevronRect = chevron.getBoundingClientRect();
+        
+        const measurements = `
+            <strong>Layout Measurements:</strong><br>
+            Widget Width: <span class="measurement">280px</span><br>
+            Widget Height: <span class="measurement">44px</span><br><br>
+            
+            <strong>Element Positions (from left):</strong><br>
+            Logo: <span class="measurement">${logoRect.left - headerRect.left}px</span> (width: ${logoRect.width}px)<br>
+            Status: <span class="measurement">${statusRect.left - headerRect.left}px</span> (width: ${statusRect.width}px)<br>
+            Chevron: <span class="measurement">${chevronRect.left - headerRect.left}px</span> (width: ${chevronRect.width}px)<br><br>
+            
+            <strong>Spacing:</strong><br>
+            Gap between Logo and Status: <span class="measurement">${statusRect.left - logoRect.right}px</span><br>
+            Gap between Status and Chevron: <span class="measurement">${chevronRect.left - statusRect.right}px</span><br><br>
+            
+            <strong>Vertical Alignment:</strong><br>
+            Logo center Y: <span class="measurement">${(logoRect.top + logoRect.height/2 - headerRect.top).toFixed(1)}px</span><br>
+            Status center Y: <span class="measurement">${(statusRect.top + statusRect.height/2 - headerRect.top).toFixed(1)}px</span><br>
+            Chevron center Y: <span class="measurement">${(chevronRect.top + chevronRect.height/2 - headerRect.top).toFixed(1)}px</span><br>
+            Header center Y: <span class="measurement">${headerRect.height/2}px</span><br><br>
+            
+            <strong>✓ All elements should be vertically centered at ~22px</strong>
+        `;
+        
+        document.getElementById('measurements').innerHTML = measurements;
+    </script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Widget Alignment Verification</title>
+    <style>
+        body {
+            margin: 40px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #2a2a2a;
+        }
+        
+        /* Exact replica of React component styles */
+        .widget {
+            position: fixed;
+            left: 50px;
+            top: 50px;
+            z-index: 2147483647;
+            background: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+            width: 280px;
+            height: 44px;
+            cursor: pointer;
+        }
+        
+        .collapsed-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+        }
+        
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+            cursor: move;
+            user-select: none;
+            height: 44px;
+            gap: 12px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        
+        .logo {
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            flex-shrink: 0;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex: 1 1 auto;
+            justify-content: center;
+            min-width: 0;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: #4ade80;
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+            display: inline-block;
+        }
+        
+        .status-text {
+            font-size: 13px;
+            font-weight: 500;
+            opacity: 0.95;
+            white-space: nowrap;
+        }
+        
+        .chevron {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+        }
+        
+        .chevron svg {
+            transition: transform 0.3s ease;
+        }
+        
+        .widget:hover .chevron svg {
+            transform: translateX(2px);
+        }
+        
+        .widget:hover .chevron path {
+            stroke: white;
+        }
+        
+        /* Debug grid overlay */
+        .debug-overlay {
+            position: fixed;
+            left: 50px;
+            top: 50px;
+            width: 280px;
+            height: 44px;
+            pointer-events: none;
+            z-index: 2147483648;
+        }
+        
+        .center-line {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: rgba(255, 0, 0, 0.5);
+            transform: translateY(-50%);
+        }
+        
+        .section-divider {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 1px;
+            background: rgba(255, 255, 0, 0.3);
+        }
+        
+        .info {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 400px;
+        }
+        
+        .success {
+            color: #4ade80;
+            font-weight: bold;
+        }
+        
+        .warning {
+            color: #ff9800;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- The actual widget -->
+    <div class="widget">
+        <div class="collapsed-container">
+            <div class="header">
+                <div class="logo">Zeroscript</div>
+                <div class="status">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Listening</span>
+                </div>
+                <div class="chevron">
+                    <svg width="8" height="12" viewBox="0 0 8 12" fill="none">
+                        <path d="M2 2L6 6L2 10" stroke="rgba(255, 255, 255, 0.9)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Debug overlay -->
+    <div class="debug-overlay">
+        <div class="center-line"></div>
+        <div class="section-divider" style="left: 93px;"></div>
+        <div class="section-divider" style="right: 32px;"></div>
+    </div>
+    
+    <div class="info">
+        <h3>Alignment Test Results:</h3>
+        <div id="results"></div>
+    </div>
+    
+    <script>
+        // Check alignment
+        const logo = document.querySelector('.logo');
+        const status = document.querySelector('.status');
+        const chevron = document.querySelector('.chevron');
+        const header = document.querySelector('.header');
+        
+        const logoRect = logo.getBoundingClientRect();
+        const statusRect = status.getBoundingClientRect();
+        const chevronRect = chevron.getBoundingClientRect();
+        const headerRect = header.getBoundingClientRect();
+        
+        // Calculate vertical centers
+        const headerCenter = headerRect.height / 2;
+        const logoCenter = (logoRect.top - headerRect.top) + (logoRect.height / 2);
+        const statusCenter = (statusRect.top - headerRect.top) + (statusRect.height / 2);
+        const chevronCenter = (chevronRect.top - headerRect.top) + (chevronRect.height / 2);
+        
+        // Check if all elements are centered
+        const tolerance = 2; // Allow 2px tolerance
+        const logoAligned = Math.abs(logoCenter - headerCenter) <= tolerance;
+        const statusAligned = Math.abs(statusCenter - headerCenter) <= tolerance;
+        const chevronAligned = Math.abs(chevronCenter - headerCenter) <= tolerance;
+        
+        // Calculate spacing
+        const gap1 = statusRect.left - logoRect.right;
+        const gap2 = chevronRect.left - statusRect.right;
+        
+        const results = `
+            <p><strong>Vertical Alignment (center at ${headerCenter}px):</strong></p>
+            <ul>
+                <li>Logo: ${logoCenter.toFixed(1)}px ${logoAligned ? '<span class="success">✓ Aligned</span>' : '<span class="warning">⚠ Not aligned</span>'}</li>
+                <li>Status: ${statusCenter.toFixed(1)}px ${statusAligned ? '<span class="success">✓ Aligned</span>' : '<span class="warning">⚠ Not aligned</span>'}</li>
+                <li>Chevron: ${chevronCenter.toFixed(1)}px ${chevronAligned ? '<span class="success">✓ Aligned</span>' : '<span class="warning">⚠ Not aligned</span>'}</li>
+            </ul>
+            
+            <p><strong>Horizontal Spacing:</strong></p>
+            <ul>
+                <li>Logo width: ${logoRect.width.toFixed(1)}px</li>
+                <li>Status width: ${statusRect.width.toFixed(1)}px</li>
+                <li>Chevron width: ${chevronRect.width.toFixed(1)}px</li>
+                <li>Gap (Logo → Status): ${gap1.toFixed(1)}px</li>
+                <li>Gap (Status → Chevron): ${gap2.toFixed(1)}px</li>
+            </ul>
+            
+            <p><strong>Overall Result:</strong> ${logoAligned && statusAligned && chevronAligned ? '<span class="success">✓ All elements properly centered!</span>' : '<span class="warning">⚠ Alignment needs adjustment</span>'}</p>
+        `;
+        
+        document.getElementById('results').innerHTML = results;
+    </script>
+</body>
+</html>
