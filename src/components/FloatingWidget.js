@@ -353,6 +353,7 @@ const FloatingWidget = () => {
   // Connect to Deepgram and start streaming
   const connectToDeepgram = async (token) => {
     try {
+      console.log('[DEBUG] Requesting microphone access...');
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
@@ -361,52 +362,143 @@ const FloatingWidget = () => {
           sampleRate: 16000,
         } 
       });
+      console.log('[DEBUG] Microphone access granted, stream:', stream);
+      console.log('[DEBUG] Audio tracks:', stream.getAudioTracks());
       setAudioStream(stream);
 
       // Create Deepgram client
+      console.log('[DEBUG] Creating Deepgram client with token:', token ? 'Token present' : 'No token');
       const deepgram = createClient(token);
       
-      // Create live transcription connection
+      // Create live transcription connection with encoding specified
+      console.log('[DEBUG] Creating live transcription connection...');
       const connection = deepgram.listen.live({
         model: 'nova-2',
         language: 'en-US',
         smart_format: true,
         interim_results: true,
         punctuate: true,
+        encoding: 'webm-opus',  // Specify encoding for webm
+        sample_rate: 16000,     // Match our getUserMedia sample rate
+      });
+
+      // Handle connection open
+      connection.on('open', () => {
+        console.log('[DEBUG] Deepgram WebSocket connection opened');
+        console.log('[DEBUG] Connection ready state:', connection.getReadyState());
       });
 
       // Handle transcripts
-      connection.on('transcript', handleTranscript);
+      connection.on('transcript', (message) => {
+        console.log('[DEBUG] Transcript received:', message);
+        handleTranscript(message);
+      });
       
+      // Handle metadata
+      connection.on('metadata', (metadata) => {
+        console.log('[DEBUG] Deepgram metadata received:', metadata);
+      });
+
       // Handle errors
       connection.on('error', (err) => {
-        console.error('Deepgram error:', err);
+        console.error('[DEBUG] Deepgram error:', err);
         setError('Transcription error occurred');
       });
 
       // Handle connection close
-      connection.on('close', () => {
-        console.log('Deepgram connection closed');
+      connection.on('close', (code, reason) => {
+        console.log('[DEBUG] Deepgram connection closed. Code:', code, 'Reason:', reason);
+        // Stop the MediaRecorder if connection closes
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          console.log('[DEBUG] Stopping MediaRecorder due to connection close');
+          mediaRecorder.stop();
+          setMediaRecorder(null);
+        }
+        // Clear keepalive
+        if (connection.keepAliveInterval) {
+          clearInterval(connection.keepAliveInterval);
+        }
       });
 
       // Start media recorder to capture audio
-      const recorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm',
-      });
+      console.log('[DEBUG] Setting up MediaRecorder...');
+      
+      // Check for supported MIME types
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/ogg;codecs=opus';
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            console.warn('[DEBUG] No optimal MIME type supported, using default');
+            mimeType = undefined; // Let browser choose
+          }
+        }
+      }
+      console.log('[DEBUG] Using MIME type:', mimeType || 'browser default');
+      
+      const recorderOptions = mimeType ? { mimeType } : {};
+      const recorder = new MediaRecorder(stream, recorderOptions);
 
-      recorder.ondataavailable = (event) => {
+      let chunkCount = 0;
+      recorder.ondataavailable = async (event) => {
+        chunkCount++;
+        console.log(`[DEBUG] Audio chunk #${chunkCount} - Size: ${event.data.size} bytes, Ready state: ${connection.getReadyState()}`);
         if (event.data.size > 0 && connection.getReadyState() === 1) {
-          connection.send(event.data);
+          // Send the blob directly - the SDK should handle it
+          try {
+            // The Deepgram SDK expects the blob/data directly
+            connection.send(event.data);
+            console.log(`[DEBUG] Sent audio chunk #${chunkCount} to Deepgram (${event.data.size} bytes as Blob)`);
+          } catch (err) {
+            console.error(`[DEBUG] Error sending chunk #${chunkCount}:`, err);
+          }
+        } else if (connection.getReadyState() !== 1) {
+          console.warn(`[DEBUG] Cannot send audio - WebSocket not ready. State: ${connection.getReadyState()}`);
+          // Stop recording if connection is closed
+          if (connection.getReadyState() === 3 && recorder.state !== 'inactive') {
+            console.log('[DEBUG] Stopping recorder - connection closed');
+            recorder.stop();
+          }
         }
       };
 
+      recorder.onerror = (error) => {
+        console.error('[DEBUG] MediaRecorder error:', error);
+      };
+
+      recorder.onstart = () => {
+        console.log('[DEBUG] MediaRecorder started');
+      };
+
+      recorder.onstop = () => {
+        console.log('[DEBUG] MediaRecorder stopped');
+      };
+
+      console.log('[DEBUG] Starting MediaRecorder with 250ms chunks...');
       recorder.start(250); // Send audio chunks every 250ms
       setMediaRecorder(recorder);
       setDeepgramConnection(connection);
 
+      // Set up keepalive to prevent connection timeout
+      const keepAliveInterval = setInterval(() => {
+        if (connection.getReadyState() === 1) {
+          // Send a keep-alive message (empty buffer)
+          const keepAlive = new ArrayBuffer(0);
+          connection.send(keepAlive);
+          console.log('[DEBUG] Sent keepalive to Deepgram');
+        } else {
+          console.log('[DEBUG] Stopping keepalive - connection not ready');
+          clearInterval(keepAliveInterval);
+        }
+      }, 5000); // Send keepalive every 5 seconds
+
+      // Store interval ID for cleanup
+      connection.keepAliveInterval = keepAliveInterval;
+
       return connection;
     } catch (err) {
-      console.error('Error connecting to Deepgram:', err);
+      console.error('[DEBUG] Error connecting to Deepgram:', err);
       setError(err.message);
       throw err;
     }
@@ -415,49 +507,86 @@ const FloatingWidget = () => {
   // Process accumulated transcript and get script
   const processTranscript = async () => {
     const currentBuffer = transcriptBuffer.trim();
+    console.log('[DEBUG] processTranscript called. Buffer:', currentBuffer);
+    console.log('[DEBUG] Is already processing?:', isProcessingScript);
+    
     if (currentBuffer && !isProcessingScript) {
+      console.log('[DEBUG] Processing transcript, calling getGoldenScript...');
       setIsProcessingScript(true);
       try {
         const script = await getGoldenScript(currentBuffer);
+        console.log('[DEBUG] Received script from getGoldenScript:', script);
         if (script) {
+          console.log('[DEBUG] Setting current script:', script);
           setCurrentScript(script);
           setShowSampleScript(false);
+        } else {
+          console.log('[DEBUG] No script returned from getGoldenScript');
         }
         setTranscriptBuffer(''); // Clear buffer after processing
+        console.log('[DEBUG] Cleared transcript buffer');
       } catch (err) {
-        console.error('Error processing transcript:', err);
+        console.error('[DEBUG] Error processing transcript:', err);
       } finally {
         setIsProcessingScript(false);
+        console.log('[DEBUG] Processing complete');
       }
+    } else if (!currentBuffer) {
+      console.log('[DEBUG] No transcript buffer to process');
     }
   };
 
   // Handle incoming transcripts from Deepgram
   const handleTranscript = (message) => {
+    console.log('[DEBUG] handleTranscript called with message:', JSON.stringify(message, null, 2));
+    
     const transcript = message.channel?.alternatives?.[0];
-    if (transcript && transcript.transcript && message.is_final) {
-      setTranscriptBuffer(prev => prev + ' ' + transcript.transcript);
-      
-      // Clear existing timeout
-      if (transcriptTimeoutRef.current) {
-        clearTimeout(transcriptTimeoutRef.current);
+    console.log('[DEBUG] Extracted transcript:', transcript);
+    console.log('[DEBUG] Is final?:', message.is_final);
+    console.log('[DEBUG] Transcript text:', transcript?.transcript);
+    
+    if (transcript && transcript.transcript) {
+      if (message.is_final) {
+        console.log('[DEBUG] Final transcript received:', transcript.transcript);
+        setTranscriptBuffer(prev => {
+          const newBuffer = prev + ' ' + transcript.transcript;
+          console.log('[DEBUG] Updated transcript buffer:', newBuffer);
+          return newBuffer;
+        });
+        
+        // Clear existing timeout
+        if (transcriptTimeoutRef.current) {
+          clearTimeout(transcriptTimeoutRef.current);
+          console.log('[DEBUG] Cleared existing transcript timeout');
+        }
+        
+        // Set new timeout to process transcript after 500ms of silence
+        console.log('[DEBUG] Setting new timeout to process transcript in 500ms');
+        transcriptTimeoutRef.current = setTimeout(() => {
+          console.log('[DEBUG] Timeout triggered, processing transcript...');
+          processTranscript();
+        }, 500);
+      } else {
+        console.log('[DEBUG] Interim transcript (not final):', transcript.transcript);
       }
-      
-      // Set new timeout to process transcript after 500ms of silence
-      transcriptTimeoutRef.current = setTimeout(() => {
-        processTranscript();
-      }, 500);
+    } else {
+      console.log('[DEBUG] No transcript text in message');
     }
   };
 
   // Get Golden Script from Edge Function
   const getGoldenScript = async (transcript) => {
+    console.log('[DEBUG] getGoldenScript called with transcript:', transcript);
     try {
       const session = await getSession();
+      console.log('[DEBUG] Session obtained:', session ? 'Yes' : 'No');
       if (!session) {
         throw new Error('No active session. Please log in through the extension popup.');
       }
 
+      const requestBody = { text: transcript };
+      console.log('[DEBUG] Sending request to get-script with body:', requestBody);
+      
       const response = await fetch(`${process.env.REACT_APP_SUPABASE_URL}/functions/v1/get-script`, {
         method: 'POST',
         headers: {
@@ -465,17 +594,24 @@ const FloatingWidget = () => {
           'Content-Type': 'application/json',
         },
         // The API expects 'text' not 'transcript'
-        body: JSON.stringify({ text: transcript }),
+        body: JSON.stringify(requestBody),
       });
 
+      console.log('[DEBUG] get-script response status:', response.status);
+      
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[DEBUG] get-script error response:', errorText);
         throw new Error(`Failed to get script: ${response.statusText}`);
       }
 
-      const { script } = await response.json();
+      const responseData = await response.json();
+      console.log('[DEBUG] get-script response data:', responseData);
+      const { script } = responseData;
+      console.log('[DEBUG] Extracted script from response:', script);
       return script;
     } catch (err) {
-      console.error('Error getting golden script:', err);
+      console.error('[DEBUG] Error getting golden script:', err);
       setError(err.message);
       return null;
     }
@@ -483,6 +619,12 @@ const FloatingWidget = () => {
 
   // Start call with improved error handling
   const startCall = async () => {
+    // Prevent duplicate connections
+    if (isCallActive || deepgramConnection) {
+      console.log('[DEBUG] Call already active, ignoring start request');
+      return;
+    }
+    
     try {
       setError(null);
       setIsCallActive(true);
@@ -535,8 +677,13 @@ const FloatingWidget = () => {
         mediaRecorder.stop();
       }
       
-      // Close Deepgram connection
+      // Close Deepgram connection and clean up keepalive
       if (deepgramConnection) {
+        // Clear keepalive interval if it exists
+        if (deepgramConnection.keepAliveInterval) {
+          clearInterval(deepgramConnection.keepAliveInterval);
+          console.log('[DEBUG] Cleared keepalive interval');
+        }
         deepgramConnection.finish();
       }
       
