@@ -54,12 +54,51 @@ const FloatingWidget = () => {
     "Bankruptcy is serious, but we can still help ensure it's reported accurately and work on rebuilding your credit profile around it."
   ];
 
-  // Get session from Supabase or Chrome storage
-  const getSession = async () => {
+  // Helper function to check if session is expired
+  const isSessionExpired = (session) => {
+    if (!session || !session.expires_at) return true;
+    
+    // Check if session expires in less than 5 minutes
+    const expiresAt = new Date(session.expires_at * 1000);
+    const now = new Date();
+    const fiveMinutes = 5 * 60 * 1000;
+    
+    return (expiresAt - now) < fiveMinutes;
+  };
+
+  // Get session from Supabase or Chrome storage with automatic refresh
+  const getSession = async (forceRefresh = false) => {
     try {
       // First try to get from Supabase directly
       if (supabase) {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        // If we have a session but it might be expired, try to refresh it
+        if (session && (forceRefresh || isSessionExpired(session))) {
+          console.log('Session might be expired, attempting refresh...');
+          const { data: { session: refreshedSession }, error: refreshError } = await supabase.auth.refreshSession();
+          
+          if (refreshError) {
+            console.error('Failed to refresh session:', refreshError);
+            // Clear invalid session from storage
+            if (chrome?.storage?.local) {
+              chrome.storage.local.remove(['user', 'session']);
+            }
+            return null;
+          }
+          
+          if (refreshedSession) {
+            // Update Chrome storage with refreshed session
+            if (chrome?.storage?.local) {
+              chrome.storage.local.set({ 
+                session: refreshedSession,
+                user: refreshedSession.user 
+              });
+            }
+            return refreshedSession;
+          }
+        }
+        
         if (session) {
           return session;
         }
@@ -70,7 +109,14 @@ const FloatingWidget = () => {
         return new Promise((resolve) => {
           chrome.storage.local.get(['session'], (result) => {
             if (result.session) {
-              resolve(result.session);
+              // Check if stored session is expired
+              if (isSessionExpired(result.session)) {
+                console.log('Stored session is expired');
+                chrome.storage.local.remove(['user', 'session']);
+                resolve(null);
+              } else {
+                resolve(result.session);
+              }
             } else {
               resolve(null);
             }
@@ -85,7 +131,7 @@ const FloatingWidget = () => {
     }
   };
 
-  // Load saved position from localStorage on mount
+  // Load saved position from localStorage on mount and set up session refresh
   useEffect(() => {
     const savedPosition = localStorage.getItem('zeroscript-widget-position');
     if (savedPosition) {
@@ -97,12 +143,26 @@ const FloatingWidget = () => {
       }
     }
     
-    // Also check for session on mount
+    // Check for session on mount
     getSession().then(session => {
       if (session) {
         setSessionToken(session.access_token);
       }
     });
+    
+    // Set up periodic session refresh every 30 minutes to prevent expiration
+    const refreshInterval = setInterval(async () => {
+      const session = await getSession();
+      if (session && isSessionExpired(session)) {
+        console.log('Proactively refreshing session to prevent expiration...');
+        const refreshedSession = await getSession(true);
+        if (refreshedSession) {
+          setSessionToken(refreshedSession.access_token);
+        }
+      }
+    }, 30 * 60 * 1000); // 30 minutes
+    
+    return () => clearInterval(refreshInterval);
   }, []);
 
   // Save position to localStorage whenever it changes
@@ -244,10 +304,12 @@ const FloatingWidget = () => {
     }
   };
 
-  // Get Deepgram token from Edge Function
-  const getDeepgramToken = async () => {
+  // Get Deepgram token from Edge Function with retry logic
+  const getDeepgramToken = async (retryCount = 0) => {
     try {
-      const session = await getSession();
+      // Try to get session, refreshing if necessary
+      let session = await getSession(retryCount > 0);
+      
       if (!session) {
         throw new Error('No active session. Please log in through the extension popup.');
       }
@@ -260,8 +322,22 @@ const FloatingWidget = () => {
         },
       });
 
+      // If we get a 401, try to refresh the session once
+      if (response.status === 401 && retryCount === 0) {
+        console.log('Got 401, attempting to refresh session and retry...');
+        session = await getSession(true); // Force refresh
+        
+        if (session) {
+          // Retry with refreshed token
+          return getDeepgramToken(1);
+        } else {
+          throw new Error('Session expired. Please log in again through the extension popup.');
+        }
+      }
+
       if (!response.ok) {
-        throw new Error(`Failed to get Deepgram token: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to get Deepgram token: ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -405,7 +481,7 @@ const FloatingWidget = () => {
     }
   };
 
-  // Start call
+  // Start call with improved error handling
   const startCall = async () => {
     try {
       setError(null);
@@ -415,7 +491,7 @@ const FloatingWidget = () => {
         data: { message: 'Getting Deepgram token...' } 
       });
 
-      // Get Deepgram token
+      // Get Deepgram token with retry logic
       const token = await getDeepgramToken();
       setDeepgramToken(token);
       
@@ -433,9 +509,21 @@ const FloatingWidget = () => {
       });
     } catch (err) {
       console.error('Error starting call:', err);
-      setError(err.message);
+      
+      // Provide more helpful error messages
+      let errorMessage = err.message;
+      if (err.message.includes('401') || err.message.includes('expired')) {
+        errorMessage = 'Session expired. Please refresh the page and try again.';
+      } else if (err.message.includes('microphone')) {
+        errorMessage = 'Microphone access denied. Please allow microphone access and try again.';
+      }
+      
+      setError(errorMessage);
       setIsCallActive(false);
-      setCurrentStatus({ type: 'idle', data: {} });
+      setCurrentStatus({ 
+        type: 'error', 
+        data: { message: errorMessage } 
+      });
     }
   };
 
@@ -552,7 +640,25 @@ const FloatingWidget = () => {
               />
                 {error && (
                   <div className="error-message">
-                    {error}
+                    <div className="error-text">{error}</div>
+                    {(error.includes('expired') || error.includes('401')) && (
+                      <button 
+                        className="retry-button"
+                        onClick={() => window.location.reload()}
+                        style={{
+                          marginTop: '8px',
+                          padding: '6px 12px',
+                          backgroundColor: '#007bff',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '12px'
+                        }}
+                      >
+                        Refresh Page
+                      </button>
+                    )}
                   </div>
                 )}
                 <div className="widget-controls">
