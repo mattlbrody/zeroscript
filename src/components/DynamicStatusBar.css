@@ -1,0 +1,79 @@
+.dynamic-status-bar {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 16px;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: 14px;
+  border-bottom: 1px solid #e0e0e0;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.status-icon {
+  font-weight: 600;
+  margin-right: 12px;
+  font-family: 'Courier New', Courier, monospace;
+  white-space: nowrap;
+}
+
+.status-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Status-specific styles */
+.status-stage {
+  background-color: #f0f0f0;
+  color: #333333;
+}
+
+.status-question {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+
+.status-question .status-icon {
+  color: #1976d2;
+}
+
+.status-objection {
+  background-color: #fff9c4;
+  color: #f57c00;
+}
+
+.status-objection .status-icon {
+  color: #f57c00;
+}
+
+.status-diagnosis {
+  background-color: #f0f0f0;
+  color: #333333;
+}
+
+.status-diagnosis .status-icon {
+  color: #4caf50;
+}
+
+.status-idle {
+  background-color: #f0f0f0;
+  color: #666666;
+}
+
+.status-idle .status-icon {
+  color: #999999;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}

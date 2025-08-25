@@ -31,12 +31,12 @@
   height: 100%;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 0 15px;
   border-radius: 8px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   user-select: none;
+  gap: 12px;
 }
 
 .collapsed-header:hover {
@@ -75,12 +75,14 @@
   font-size: 16px;
   font-weight: 600;
   letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 
 /* Status Indicator (Collapsed View) */
 .widget-status {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   flex: 1;
 }
@@ -105,19 +107,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-left: 10px;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
 }
 
-.chevron-icon {
-  font-size: 24px;
-  font-weight: 300;
+.expand-chevron svg {
   color: rgba(255, 255, 255, 0.9);
-  transition: transform 0.3s ease;
-  display: inline-block;
-  line-height: 1;
+  transition: transform 0.3s ease, color 0.3s ease;
 }
 
-.widget-collapsed:hover .chevron-icon {
+.widget-collapsed:hover .expand-chevron svg {
   transform: translateX(3px);
   color: white;
 }
@@ -209,6 +209,52 @@
   background: #d1d5db;
 }
 
+/* Diagnosis buttons in widget controls */
+.widget-controls .diagnosis-buttons-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+}
+
+.widget-controls .diagnosis-button {
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 2px solid #333;
+  background-color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+}
+
+.widget-controls .diagnosis-button:hover {
+  background-color: #f0f0f0;
+  transform: translateY(-1px);
+}
+
+.widget-controls .diagnosis-yes {
+  color: #2e7d32;
+  border-color: #2e7d32;
+}
+
+.widget-controls .diagnosis-yes:hover {
+  background-color: #e8f5e9;
+}
+
+.widget-controls .diagnosis-no {
+  color: #c62828;
+  border-color: #c62828;
+}
+
+.widget-controls .diagnosis-no:hover {
+  background-color: #ffebee;
+}
+
 /* Animations */
 @keyframes pulse {
   0% {
@@ -263,4 +309,28 @@
 
 .widget-body::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* Test Alert Button - Temporary Styling */
+.test-alert-button {
+  padding: 8px 16px;
+  background-color: #f9f9f9;
+  color: #666;
+  border: 2px dashed #999;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.test-alert-button:hover {
+  background-color: #fff;
+  border-color: #FFD700;
+  color: #333;
+}
+
+.test-alert-button:active {
+  transform: scale(0.98);
 }
