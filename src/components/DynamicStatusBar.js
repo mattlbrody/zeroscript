@@ -53,12 +53,32 @@ const DynamicStatusBar = ({ status }) => {
           </div>
         );
 
+      case 'connecting':
+        return (
+          <div className="dynamic-status-bar status-connecting">
+            <span className="status-icon">[ ⟳ ]</span>
+            <span className="status-text">
+              {status.data?.message || 'Connecting...'}
+            </span>
+          </div>
+        );
+
+      case 'listening':
+        return (
+          <div className="dynamic-status-bar status-listening">
+            <span className="status-icon">[ ● ]</span>
+            <span className="status-text">
+              {status.data?.message || 'Listening to call...'}
+            </span>
+          </div>
+        );
+
       case 'idle':
       default:
         return (
           <div className="dynamic-status-bar status-idle">
-            <span className="status-icon">[ ● ]</span>
-            <span className="status-text">Listening...</span>
+            <span className="status-icon">[ ○ ]</span>
+            <span className="status-text">Ready</span>
           </div>
         );
     }

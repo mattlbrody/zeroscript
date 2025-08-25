@@ -10,7 +10,7 @@
     "watch": "webpack --watch --mode development"
   },
   "dependencies": {
-    "@deepgram/sdk": "^3.2.0",
+    "@deepgram/sdk": "^3.13.0",
     "@supabase/supabase-js": "^2.56.0",
     "openai": "^5.15.0",
     "react": "^18.2.0",

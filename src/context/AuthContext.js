@@ -24,15 +24,18 @@ export const AuthProvider = ({ children }) => {
         async (event, session) => {
           if (session?.user) {
             setUser(session.user);
-            // Save user to Chrome storage for content script
+            // Save user and session to Chrome storage for content script
             if (chrome?.storage?.local) {
-              chrome.storage.local.set({ user: session.user });
+              chrome.storage.local.set({ 
+                user: session.user,
+                session: session 
+              });
             }
           } else {
             setUser(null);
-            // Clear user from Chrome storage
+            // Clear user and session from Chrome storage
             if (chrome?.storage?.local) {
-              chrome.storage.local.remove('user');
+              chrome.storage.local.remove(['user', 'session']);
             }
           }
         }
@@ -55,15 +58,18 @@ export const AuthProvider = ({ children }) => {
       
       if (session?.user) {
         setUser(session.user);
-        // Save user to Chrome storage for content script
+        // Save user and session to Chrome storage for content script
         if (chrome?.storage?.local) {
-          chrome.storage.local.set({ user: session.user });
+          chrome.storage.local.set({ 
+            user: session.user,
+            session: session 
+          });
         }
       } else {
         setUser(null);
-        // Clear user from Chrome storage
+        // Clear user and session from Chrome storage
         if (chrome?.storage?.local) {
-          chrome.storage.local.remove('user');
+          chrome.storage.local.remove(['user', 'session']);
         }
       }
     } catch (error) {
@@ -85,9 +91,12 @@ export const AuthProvider = ({ children }) => {
       if (error) throw error;
       
       setUser(data.user);
-      // Save user to Chrome storage for content script
+      // Save user and session to Chrome storage for content script
       if (chrome?.storage?.local && data.user) {
-        chrome.storage.local.set({ user: data.user });
+        chrome.storage.local.set({ 
+          user: data.user,
+          session: data.session 
+        });
       }
       return { user: data.user, error: null };
     } catch (error) {
@@ -104,9 +113,9 @@ export const AuthProvider = ({ children }) => {
       if (error) throw error;
       
       setUser(null);
-      // Clear user from Chrome storage
+      // Clear user and session from Chrome storage
       if (chrome?.storage?.local) {
-        chrome.storage.local.remove('user');
+        chrome.storage.local.remove(['user', 'session']);
       }
     } catch (error) {
       console.error('Error signing out:', error);

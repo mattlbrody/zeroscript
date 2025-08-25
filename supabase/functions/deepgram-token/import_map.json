@@ -1,6 +1,5 @@
 {
   "imports": {
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2",
-    "@deepgram/sdk": "https://esm.sh/@deepgram/sdk@3"
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
   }
 }

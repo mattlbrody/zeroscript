@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './FloatingWidget.css';
 import ScriptWindow from './ScriptWindow.js';
 import DynamicStatusBar from './DynamicStatusBar.js';
+import { createClient } from '@deepgram/sdk';
+import { supabase } from '../supabaseClient.js';
 
 const FloatingWidget = () => {
   const [isCollapsed, setIsCollapsed] = useState(true);
@@ -15,7 +17,20 @@ const FloatingWidget = () => {
   const [diagnosisStep, setDiagnosisStep] = useState(0);
   const [diagnosisAnswers, setDiagnosisAnswers] = useState([]);
   const [showingResponse, setShowingResponse] = useState(false);
+  
+  // Real-time call state
+  const [isCallActive, setIsCallActive] = useState(false);
+  const [deepgramConnection, setDeepgramConnection] = useState(null);
+  const [deepgramToken, setDeepgramToken] = useState(null);
+  const [transcriptBuffer, setTranscriptBuffer] = useState('');
+  const [isProcessingScript, setIsProcessingScript] = useState(false);
+  const [error, setError] = useState(null);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [audioStream, setAudioStream] = useState(null);
+  
   const widgetRef = useRef(null);
+  const transcriptTimeoutRef = useRef(null);
+  const [sessionToken, setSessionToken] = useState(null);
 
   // Diagnosis questions
   const DIAGNOSIS_QUESTIONS = [
@@ -39,6 +54,37 @@ const FloatingWidget = () => {
     "Bankruptcy is serious, but we can still help ensure it's reported accurately and work on rebuilding your credit profile around it."
   ];
 
+  // Get session from Supabase or Chrome storage
+  const getSession = async () => {
+    try {
+      // First try to get from Supabase directly
+      if (supabase) {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          return session;
+        }
+      }
+      
+      // If not available, try Chrome storage (for content script)
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        return new Promise((resolve) => {
+          chrome.storage.local.get(['session'], (result) => {
+            if (result.session) {
+              resolve(result.session);
+            } else {
+              resolve(null);
+            }
+          });
+        });
+      }
+      
+      return null;
+    } catch (err) {
+      console.error('Error getting session:', err);
+      return null;
+    }
+  };
+
   // Load saved position from localStorage on mount
   useEffect(() => {
     const savedPosition = localStorage.getItem('zeroscript-widget-position');
@@ -50,6 +96,13 @@ const FloatingWidget = () => {
         console.error('Failed to parse saved widget position:', e);
       }
     }
+    
+    // Also check for session on mount
+    getSession().then(session => {
+      if (session) {
+        setSessionToken(session.access_token);
+      }
+    });
   }, []);
 
   // Save position to localStorage whenever it changes
@@ -191,6 +244,249 @@ const FloatingWidget = () => {
     }
   };
 
+  // Get Deepgram token from Edge Function
+  const getDeepgramToken = async () => {
+    try {
+      const session = await getSession();
+      if (!session) {
+        throw new Error('No active session. Please log in through the extension popup.');
+      }
+
+      const response = await fetch(`${process.env.REACT_APP_SUPABASE_URL}/functions/v1/deepgram-token`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to get Deepgram token: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      // The API returns 'key' not 'token'
+      return data.key || data.token;
+    } catch (err) {
+      console.error('Error getting Deepgram token:', err);
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  // Connect to Deepgram and start streaming
+  const connectToDeepgram = async (token) => {
+    try {
+      // Request microphone access
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000,
+        } 
+      });
+      setAudioStream(stream);
+
+      // Create Deepgram client
+      const deepgram = createClient(token);
+      
+      // Create live transcription connection
+      const connection = deepgram.listen.live({
+        model: 'nova-2',
+        language: 'en-US',
+        smart_format: true,
+        interim_results: true,
+        punctuate: true,
+      });
+
+      // Handle transcripts
+      connection.on('transcript', handleTranscript);
+      
+      // Handle errors
+      connection.on('error', (err) => {
+        console.error('Deepgram error:', err);
+        setError('Transcription error occurred');
+      });
+
+      // Handle connection close
+      connection.on('close', () => {
+        console.log('Deepgram connection closed');
+      });
+
+      // Start media recorder to capture audio
+      const recorder = new MediaRecorder(stream, {
+        mimeType: 'audio/webm',
+      });
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0 && connection.getReadyState() === 1) {
+          connection.send(event.data);
+        }
+      };
+
+      recorder.start(250); // Send audio chunks every 250ms
+      setMediaRecorder(recorder);
+      setDeepgramConnection(connection);
+
+      return connection;
+    } catch (err) {
+      console.error('Error connecting to Deepgram:', err);
+      setError(err.message);
+      throw err;
+    }
+  };
+
+  // Process accumulated transcript and get script
+  const processTranscript = async () => {
+    const currentBuffer = transcriptBuffer.trim();
+    if (currentBuffer && !isProcessingScript) {
+      setIsProcessingScript(true);
+      try {
+        const script = await getGoldenScript(currentBuffer);
+        if (script) {
+          setCurrentScript(script);
+          setShowSampleScript(false);
+        }
+        setTranscriptBuffer(''); // Clear buffer after processing
+      } catch (err) {
+        console.error('Error processing transcript:', err);
+      } finally {
+        setIsProcessingScript(false);
+      }
+    }
+  };
+
+  // Handle incoming transcripts from Deepgram
+  const handleTranscript = (message) => {
+    const transcript = message.channel?.alternatives?.[0];
+    if (transcript && transcript.transcript && message.is_final) {
+      setTranscriptBuffer(prev => prev + ' ' + transcript.transcript);
+      
+      // Clear existing timeout
+      if (transcriptTimeoutRef.current) {
+        clearTimeout(transcriptTimeoutRef.current);
+      }
+      
+      // Set new timeout to process transcript after 500ms of silence
+      transcriptTimeoutRef.current = setTimeout(() => {
+        processTranscript();
+      }, 500);
+    }
+  };
+
+  // Get Golden Script from Edge Function
+  const getGoldenScript = async (transcript) => {
+    try {
+      const session = await getSession();
+      if (!session) {
+        throw new Error('No active session. Please log in through the extension popup.');
+      }
+
+      const response = await fetch(`${process.env.REACT_APP_SUPABASE_URL}/functions/v1/get-script`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        // The API expects 'text' not 'transcript'
+        body: JSON.stringify({ text: transcript }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to get script: ${response.statusText}`);
+      }
+
+      const { script } = await response.json();
+      return script;
+    } catch (err) {
+      console.error('Error getting golden script:', err);
+      setError(err.message);
+      return null;
+    }
+  };
+
+  // Start call
+  const startCall = async () => {
+    try {
+      setError(null);
+      setIsCallActive(true);
+      setCurrentStatus({ 
+        type: 'connecting', 
+        data: { message: 'Getting Deepgram token...' } 
+      });
+
+      // Get Deepgram token
+      const token = await getDeepgramToken();
+      setDeepgramToken(token);
+      
+      setCurrentStatus({ 
+        type: 'connecting', 
+        data: { message: 'Connecting to transcription service...' } 
+      });
+
+      // Connect to Deepgram
+      await connectToDeepgram(token);
+      
+      setCurrentStatus({ 
+        type: 'listening', 
+        data: { message: 'Listening to call...' } 
+      });
+    } catch (err) {
+      console.error('Error starting call:', err);
+      setError(err.message);
+      setIsCallActive(false);
+      setCurrentStatus({ type: 'idle', data: {} });
+    }
+  };
+
+  // End call
+  const endCall = () => {
+    try {
+      // Stop media recorder
+      if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+      }
+      
+      // Close Deepgram connection
+      if (deepgramConnection) {
+        deepgramConnection.finish();
+      }
+      
+      // Stop audio stream
+      if (audioStream) {
+        audioStream.getTracks().forEach(track => track.stop());
+      }
+      
+      // Clear timeouts
+      if (transcriptTimeoutRef.current) {
+        clearTimeout(transcriptTimeoutRef.current);
+      }
+      
+      // Reset state
+      setIsCallActive(false);
+      setDeepgramConnection(null);
+      setDeepgramToken(null);
+      setMediaRecorder(null);
+      setAudioStream(null);
+      setTranscriptBuffer('');
+      setIsProcessingScript(false);
+      setCurrentStatus({ type: 'idle', data: {} });
+      setError(null);
+    } catch (err) {
+      console.error('Error ending call:', err);
+      setError(err.message);
+    }
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (isCallActive) {
+        endCall();
+      }
+    };
+  }, [isCallActive]);
+
   // Generate script based on diagnosis answers
   const generateDiagnosisScript = (answers) => {
     const issues = [];
@@ -254,6 +550,11 @@ const FloatingWidget = () => {
                 scriptText={currentScript || (showSampleScript ? "Hello! Thank you for calling. How can I assist you today?" : "")} 
                 mode='script'
               />
+                {error && (
+                  <div className="error-message">
+                    {error}
+                  </div>
+                )}
                 <div className="widget-controls">
                   {isDiagnosing ? (
                     <div className="diagnosis-buttons-container">
@@ -273,12 +574,21 @@ const FloatingWidget = () => {
                       )}
                     </div>
                   ) : (
-                    <button 
-                      className="diagnosis-trigger-button"
-                      onClick={handleStartDiagnosis}
-                    >
-                      Start Credit Diagnosis
-                    </button>
+                    <div className="control-buttons">
+                      <button 
+                        className={`call-button ${isCallActive ? 'end-call' : 'start-call'}`}
+                        onClick={isCallActive ? endCall : startCall}
+                        disabled={isProcessingScript}
+                      >
+                        {isCallActive ? 'End Call' : 'Start Call'}
+                      </button>
+                      <button 
+                        className="diagnosis-trigger-button"
+                        onClick={handleStartDiagnosis}
+                      >
+                        Start Credit Diagnosis
+                      </button>
+                    </div>
                   )}
                 </div>
             </div>

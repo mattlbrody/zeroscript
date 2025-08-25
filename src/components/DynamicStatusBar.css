@@ -66,6 +66,25 @@
 
 .status-idle .status-icon {
   color: #999999;
+}
+
+.status-connecting {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+
+.status-connecting .status-icon {
+  color: #ef6c00;
+  animation: spin 1s linear infinite;
+}
+
+.status-listening {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status-listening .status-icon {
+  color: #4caf50;
   animation: pulse 2s ease-in-out infinite;
 }
 
@@ -75,5 +94,14 @@
   }
   50% {
     opacity: 1;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
