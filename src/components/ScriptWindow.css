@@ -3,10 +3,11 @@
   border-radius: 8px;
   padding: 20px;
   min-height: 120px;
+  max-height: 300px;
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  overflow-y: auto;
 }
 
 .script-text {
@@ -18,12 +19,33 @@
     sans-serif;
   white-space: pre-wrap;
   word-wrap: break-word;
+  overflow-y: auto;
+}
+
+/* Custom scrollbar for the script window */
+.script-window::-webkit-scrollbar {
+  width: 8px;
+}
+
+.script-window::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.script-window::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.script-window::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
 
 .script-text.placeholder {
   color: #999;
   font-style: italic;
   text-align: center;
+  margin: auto;
 }
 
 .diagnosis-buttons-container {

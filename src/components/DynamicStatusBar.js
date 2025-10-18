@@ -13,6 +13,16 @@ const DynamicStatusBar = ({ status }) => {
 
   const renderStatusContent = () => {
     switch (status.type) {
+      case 'phase':
+        return (
+          <div className="dynamic-status-bar status-phase">
+            <span className="status-icon">[ {status.data?.current || 1}/{status.data?.total || 6} ]</span>
+            <span className="status-text">
+              {status.data?.name || 'Unknown Phase'}
+            </span>
+          </div>
+        );
+      
       case 'stage':
         return (
           <div className="dynamic-status-bar status-stage">

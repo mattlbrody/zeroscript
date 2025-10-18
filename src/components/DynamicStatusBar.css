@@ -27,6 +27,17 @@
 }
 
 /* Status-specific styles */
+.status-phase {
+  background: linear-gradient(135deg, #e0f2fe 0%, #ddd6fe 100%);
+  color: #4c1d95;
+  font-weight: 600;
+}
+
+.status-phase .status-icon {
+  color: #6d28d9;
+  font-weight: 700;
+}
+
 .status-stage {
   background-color: #f0f0f0;
   color: #333333;

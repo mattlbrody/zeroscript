@@ -45,8 +45,8 @@
 
 /* Expanded State */
 .floating-widget.expanded {
-  width: 400px;
-  height: 500px;
+  width: 600px;
+  height: 580px;
   display: flex;
   flex-direction: column;
 }
@@ -68,6 +68,23 @@
   border-radius: 8px 8px 0 0;
   cursor: move;
   user-select: none;
+}
+
+/* Two-panel layout */
+.widget-panels {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  border-radius: 0 0 8px 8px;
+}
+
+/* Main panel (right side) */
+.main-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: white;
+  min-width: 0; /* Prevent flex child from overflowing */
 }
 
 /* Logo Styling */
@@ -151,7 +168,6 @@
 .widget-body {
   flex: 1;
   background: white;
-  border-radius: 0 0 8px 8px;
   overflow: hidden;
   position: relative;
   display: flex;
@@ -171,9 +187,78 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-top: 20px;
+  margin-top: auto;
+  padding-top: 15px;
   width: 100%;
 }
+
+/* Phase Navigation */
+.phase-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid #e5e7eb;
+}
+
+.nav-button {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 80px;
+}
+
+.nav-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-color: #667eea;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+}
+
+.nav-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.phase-indicator {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6b7280;
+  padding: 0 10px;
+}
+
+/* Return to Script Button */
+.return-to-script-button {
+  width: 100%;
+  padding: 10px;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(251, 191, 36, 0.3);
+}
+
+.return-to-script-button:hover {
+  background: linear-gradient(135deg, #fcd34d 0%, #fbbf24 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(251, 191, 36, 0.4);
+}
+
+/* Removed call controls - no longer needed */
 
 /* Control Buttons Container */
 .control-buttons {
@@ -183,47 +268,7 @@
   width: 100%;
 }
 
-/* Call Button */
-.call-button {
-  padding: 12px 24px;
-  border: none;
-  border-radius: 6px;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  width: 100%;
-}
-
-.call-button.start-call {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-}
-
-.call-button.start-call:hover:not(:disabled) {
-  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-}
-
-.call-button.end-call {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: white;
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
-}
-
-.call-button.end-call:hover:not(:disabled) {
-  background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-}
-
-.call-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
+/* Call Button - Removed for MVP */
 
 .diagnosis-trigger-button {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -351,11 +396,73 @@
   }
 }
 
+/* Diagnosis Controls */
+.diagnosis-controls {
+  margin-bottom: 10px;
+}
+
+.diagnosis-buttons-row {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  padding: 10px 0;
+}
+
+.diagnosis-controls .diagnosis-button {
+  padding: 10px 30px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 2px solid #333;
+  background-color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  min-width: 100px;
+}
+
+.diagnosis-controls .diagnosis-button:hover {
+  background-color: #f0f0f0;
+  transform: translateY(-1px);
+}
+
+.diagnosis-controls .diagnosis-yes {
+  color: #2e7d32;
+  border-color: #2e7d32;
+}
+
+.diagnosis-controls .diagnosis-yes:hover {
+  background-color: #e8f5e9;
+}
+
+.diagnosis-controls .diagnosis-no {
+  color: #c62828;
+  border-color: #c62828;
+}
+
+.diagnosis-controls .diagnosis-no:hover {
+  background-color: #ffebee;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .floating-widget.expanded {
-    width: 350px;
-    height: 450px;
+    width: 90vw;
+    max-width: 550px;
+    height: 520px;
+  }
+  
+  .objections-panel {
+    width: 120px;
+  }
+  
+  .phase-navigation {
+    flex-wrap: wrap;
+  }
+  
+  .phase-indicator {
+    width: 100%;
+    order: -1;
+    margin-bottom: 10px;
   }
 }
 

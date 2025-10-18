@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './FloatingWidget.css';
 import ScriptWindow from './ScriptWindow.js';
 import DynamicStatusBar from './DynamicStatusBar.js';
-import { createClient } from '@deepgram/sdk';
+import ObjectionsPanel from './ObjectionsPanel.js';
 import { supabase } from '../supabaseClient.js';
 
 const FloatingWidget = () => {
@@ -18,6 +18,11 @@ const FloatingWidget = () => {
   const [diagnosisAnswers, setDiagnosisAnswers] = useState([]);
   const [showingResponse, setShowingResponse] = useState(false);
   
+  // New states for phase-based playbook
+  const [currentPhase, setCurrentPhase] = useState(0); // 0-5 for 6 phases
+  const [selectedObjection, setSelectedObjection] = useState(null);
+  const [showObjectionRebuttal, setShowObjectionRebuttal] = useState(false);
+  
   // Real-time call state
   const [isCallActive, setIsCallActive] = useState(false);
   const [deepgramConnection, setDeepgramConnection] = useState(null);
@@ -32,26 +37,72 @@ const FloatingWidget = () => {
   const transcriptTimeoutRef = useRef(null);
   const [sessionToken, setSessionToken] = useState(null);
 
+  // Sales playbook phases
+  const PLAYBOOK_PHASES = [
+    {
+      id: 0,
+      name: 'The Opening',
+      script: "Hi [Customer Name], this is [Your Name] from Zeroscript. How is your day going? ... Great to hear. I'm giving you a call because you requested some information about helping with your credit. To start, are you aware of the specific negative items on your account?"
+    },
+    {
+      id: 1,
+      name: 'Building Authority & Trust',
+      script: "I understand. Just so you know, our founder, Matt, has been building our credibility for over ten years and is one of the best in the industry. He's the one who will be heading the work on your file."
+    },
+    {
+      id: 2,
+      name: 'The Credit Pull Pivot',
+      script: "Okay, what I can do for you right now is pull up your complete reports from all three bureaus using a secure tool. It's important we do this because it guarantees this will not be a hard inquiry that could hurt your score. It only requires a $1 charge, which is mainly to verify your identity and protect you from that hard pull."
+    },
+    {
+      id: 3,
+      name: 'The Guided Diagnosis',
+      script: "Let's review your credit report together. I'll go through the most common items that impact credit scores and see what applies to your situation."
+    },
+    {
+      id: 4,
+      name: 'The Closing Sequence',
+      script: "So, based on what we're seeing, the plan is to come after all of these negative items at once. Our initial goal is to start you with a big boost of at least 100 points across all three bureaus. The investment for the service, which covers all the work we've discussed, is [Amount] per month.\n\nAnd just so you're aware, you are protected by a 100% money-back guarantee. If we don't provide you with a minimum of a 100-point increase across all three bureaus in 90 days, you get all of your money back, fully refunded. So there is absolutely nothing for you to lose. I believe that's fair enough, correct?\n\n...Alright, perfect. So to get you started, and before I transfer you over to Matt, I just need to activate your account. To do that, we'll process the first month's payment of [Amount]. Would you like to use the same [Card Type] card you used for the credit pull?"
+    },
+    {
+      id: 5,
+      name: 'The Handoff',
+      script: "Excellent, your account is now active. I'm going to transfer you over to Matt, our head of operations. He'll re-verify everything to make sure I didn't miss anything and will be your main point of contact moving forward. Again, welcome to the team."
+    }
+  ];
+
+  // Objection rebuttals
+  const OBJECTION_REBUTTALS = {
+    price: "That's a completely fair question. The investment for the service is [Amount] per month. And just so you know, that's a flat rate that covers all the work we'll be doing on all of your accounts. More importantly, you are protected by a 100% money-back guarantee. If we don't provide you with the results we discussed, you get a full refund. So there is absolutely no risk to you to see what we can accomplish.",
+    skepticism: "I completely understand your concern. There are a lot of untrustworthy companies out there. That's why I want to be transparent. Our company is owned by Matt, who has been building our credibility for over ten years. In fact, many of our clients come to us after having a bad experience with other companies. The best part is, the risk is all on us. With our 100% money-back guarantee, if you don't get the results, you don't pay. It's that simple.",
+    timeline: "That's a great question. I would say you should expect to see significant results within two to three months, just to be on the safe side. However, I am confident that with Matt's help, you will likely start seeing a big improvement within the first month alone, so you don't have to worry.",
+    think: "I completely understand, and you should absolutely take the time you need to think it over. While you do, just remember that the decision is completely risk-free. Because of our 100% money-back guarantee, you can get started today and see the progress for yourself. If for any reason you're not satisfied, we'll refund the investment. This way, you don't lose any time in getting started on your credit goals.",
+    spouse: "That is a great idea and something I would encourage. This is a big decision, and you should both be on the same page. When you speak with them, the most important thing to remember is our 100% money-back guarantee. This makes the decision completely risk-free for both of you. You can try the service, see the results for yourself, and if you're not satisfied, you get a full refund.",
+    research: "You are absolutely right, you can dispute these items yourself. The main advantage we bring is our experience and a specific strategy that has a very high success rate, especially with collections that have been sold to third parties. We challenge them based on federal privacy laws, which is an angle most consumers aren't aware of. Essentially, you're leveraging our expertise to get the job done faster and more effectively than you likely could on your own.",
+    busy: "That's a great question. We require a monitoring service like IdentityIQ for two main reasons. First, they are accredited by the bureaus, which allows us to pull your full report without it counting as a hard inquiry that could damage your score. Second, it gives you 24/7 access to your own file so you can see the progress we're making in real-time. It ensures we're both looking at the exact same data and that everything is completely transparent.",
+    notInterested: "I respect that. Before you go, can I ask - if there was a way to improve your credit score by 100 points in the next 90 days, would that change your mind? Because that's exactly what we've done for many of our clients."
+  };
+
   // Diagnosis questions
   const DIAGNOSIS_QUESTIONS = [
-    "Are there any incorrectly spelled names?",
-    "Are there any old or incorrect addresses?",
-    "Are there any late payments?",
-    "Are there any charge-offs?",
-    "Are there any collections?",
-    "Are there any hard inquiries?",
-    "Is there a bankruptcy?"
+    "First, I'm noticing a few variations of your name on the report. Do you see any incorrect name spellings?",
+    "Next, I'm seeing some old addresses still listed here. Are there any addresses that are no longer current?",
+    "Okay, it looks like there are a few late payments being reported. Do you see any late payments on your report?",
+    "I'm also seeing an account that has been charged-off. Do you have any charge-offs showing?",
+    "Okay, I see some accounts have gone to collections. Do you have any collection accounts?",
+    "Finally, I'm seeing a number of hard inquiries here. Do you have multiple hard inquiries on your report?",
+    "Okay, I do see a bankruptcy on the report. Is there a bankruptcy filing showing?"
   ];
 
   // Scripted responses for Yes answers
   const DIAGNOSIS_RESPONSES = [
-    "I see there are incorrect name spellings on your report. This is actually great news - these are often the easiest items to dispute and have removed. We'll send letters to the bureaus requesting verification of the correct spelling.",
-    "Old or incorrect addresses can impact your credit. We'll dispute these with all three bureaus to ensure your report only shows current, accurate information.",
-    "Late payments significantly impact your score. We'll work to verify these were reported accurately and dispute any that can't be properly validated by the creditor.",
-    "Charge-offs are serious but not permanent. We'll request full verification from the original creditor and dispute any inaccuracies in how they're reported.",
-    "Collection accounts can be removed if the collector can't validate the debt. We'll demand full verification and dispute aggressively on your behalf.",
-    "Hard inquiries should only appear when you authorized them. We'll identify and dispute any unauthorized inquiries to clean up this section of your report.",
-    "Bankruptcy is serious, but we can still help ensure it's reported accurately and work on rebuilding your credit profile around it."
+    "First, I'm noticing a few variations of your name on the report. We need to clean that up to ensure everything is consistent, as this can sometimes cause issues.",
+    "Next, I'm seeing some old addresses still listed here. It's important we remove these, as they can sometimes be linked to old negative accounts and hold your score back.",
+    "Okay, it looks like there are a few late payments being reported. [Action: Name 1-2 examples]. We can definitely work on challenging the reporting of these.",
+    "I'm also seeing an account that has been charged-off. [Action: Name the creditor and the approximate amount]. This is a major factor impacting your score, and our goal will be to challenge this.",
+    "Okay, I see some accounts have gone to collections. [Action: Name 1-2 examples and state the total amount]. The good news is, because these were sold to a third-party agency, we can go after them for a privacy law violation—a strategy we have a very high success rate with.",
+    "Finally, I'm seeing a number of hard inquiries here. [Action: State the total number]. Too many of these can drag your score down, so we'll look to dispute the ones that aren't attached to an open account you authorized.",
+    "Okay, I do see a bankruptcy on the report. [Action: State the year it was filed]. While it can stay on your report for up to 10 years, we have strategies to challenge how it's being reported."
   ];
 
   // Helper function to check if session is expired
@@ -131,6 +182,83 @@ const FloatingWidget = () => {
     }
   };
 
+  // Initialize phase script on mount
+  useEffect(() => {
+    if (!showObjectionRebuttal && !isDiagnosing && currentPhase !== 3) {
+      setCurrentScript(PLAYBOOK_PHASES[currentPhase].script);
+      setShowSampleScript(false);
+    }
+  }, [currentPhase, showObjectionRebuttal, isDiagnosing]);
+
+  // Phase navigation handlers
+  const handleNextPhase = () => {
+    if (currentPhase < 5) {
+      const nextPhase = currentPhase + 1;
+      setCurrentPhase(nextPhase);
+      
+      // If moving to phase 3 (Guided Diagnosis), start diagnosis
+      if (nextPhase === 3) {
+        handleStartDiagnosis();
+      } else {
+        setCurrentScript(PLAYBOOK_PHASES[nextPhase].script);
+        setCurrentStatus({
+          type: 'phase',
+          data: {
+            current: nextPhase + 1,
+            total: 6,
+            name: PLAYBOOK_PHASES[nextPhase].name
+          }
+        });
+      }
+    }
+  };
+
+  const handlePreviousPhase = () => {
+    if (currentPhase > 0) {
+      const prevPhase = currentPhase - 1;
+      setCurrentPhase(prevPhase);
+      setCurrentScript(PLAYBOOK_PHASES[prevPhase].script);
+      setIsDiagnosing(false); // Exit diagnosis if going back
+      setCurrentStatus({
+        type: 'phase',
+        data: {
+          current: prevPhase + 1,
+          total: 6,
+          name: PLAYBOOK_PHASES[prevPhase].name
+        }
+      });
+    }
+  };
+
+  // Handle objection selection
+  const handleObjectionSelect = (objectionId) => {
+    if (showObjectionRebuttal && selectedObjection === objectionId) {
+      // Return to main script
+      setShowObjectionRebuttal(false);
+      setSelectedObjection(null);
+      setCurrentScript(PLAYBOOK_PHASES[currentPhase].script);
+      setCurrentStatus({
+        type: 'phase',
+        data: {
+          current: currentPhase + 1,
+          total: 6,
+          name: PLAYBOOK_PHASES[currentPhase].name
+        }
+      });
+    } else {
+      // Show objection rebuttal
+      setSelectedObjection(objectionId);
+      setShowObjectionRebuttal(true);
+      setCurrentScript(OBJECTION_REBUTTALS[objectionId]);
+      setCurrentStatus({
+        type: 'objection',
+        data: {
+          topic: objectionId.charAt(0).toUpperCase() + objectionId.slice(1)
+        }
+      });
+    }
+  };
+
   // Load saved position from localStorage on mount and set up session refresh
   useEffect(() => {
     const savedPosition = localStorage.getItem('zeroscript-widget-position');
@@ -142,6 +270,16 @@ const FloatingWidget = () => {
         console.error('Failed to parse saved widget position:', e);
       }
     }
+    
+    // Initialize phase status
+    setCurrentStatus({
+      type: 'phase',
+      data: {
+        current: 1,
+        total: 6,
+        name: PLAYBOOK_PHASES[0].name
+      }
+    });
     
     // Check for session on mount
     getSession().then(session => {
@@ -190,8 +328,8 @@ const FloatingWidget = () => {
         const newY = e.clientY - dragStart.y;
         
         // Get widget dimensions
-        const widgetWidth = isCollapsed ? 280 : 400;
-        const widgetHeight = isCollapsed ? 40 : 500;
+        const widgetWidth = isCollapsed ? 280 : 600; // Increased for two-panel layout
+        const widgetHeight = isCollapsed ? 40 : 580; // Increased to fit all objection buttons
         
         // Keep widget within viewport boundaries
         const boundedX = Math.max(0, Math.min(window.innerWidth - widgetWidth, newX));
@@ -223,8 +361,8 @@ const FloatingWidget = () => {
     // Adjust position if widget would go off-screen when expanding
     if (!isCollapsed) return; // If collapsing, no adjustment needed
     
-    const expandedWidth = 400;
-    const expandedHeight = 500;
+    const expandedWidth = 600; // Increased for two-panel layout
+    const expandedHeight = 580; // Increased to fit all objection buttons
     
     setPosition(prev => ({
       x: Math.min(prev.x, window.innerWidth - expandedWidth),
@@ -238,7 +376,7 @@ const FloatingWidget = () => {
     setShowSampleScript(false);
   };
 
-  // Start diagnosis
+  // Start diagnosis (Phase 3)
   const handleStartDiagnosis = () => {
     setIsDiagnosing(true);
     setDiagnosisStep(0);
@@ -246,6 +384,8 @@ const FloatingWidget = () => {
     setShowingResponse(false);
     setCurrentScript(DIAGNOSIS_QUESTIONS[0]);
     setShowSampleScript(false);
+    setShowObjectionRebuttal(false); // Clear any objection state
+    setSelectedObjection(null);
     setCurrentStatus({
       type: 'diagnosis',
       data: { 
@@ -295,12 +435,22 @@ const FloatingWidget = () => {
         }
       });
     } else {
-      // Diagnosis complete - generate final script based on answers
-      const script = generateDiagnosisScript(diagnosisAnswers);
-      setCurrentScript(script);
-      setShowSampleScript(false);
+      // Diagnosis complete - move to next phase (Solution Presentation)
       setIsDiagnosing(false);
-      setCurrentStatus({ type: 'idle', data: {} });
+      const script = generateDiagnosisScript(diagnosisAnswers);
+      
+      // Move to Phase 4 (Solution Presentation) with diagnosis results
+      setCurrentPhase(4);
+      setCurrentScript(script + "\n\n" + PLAYBOOK_PHASES[4].script);
+      setShowSampleScript(false);
+      setCurrentStatus({
+        type: 'phase',
+        data: {
+          current: 5,
+          total: 6,
+          name: PLAYBOOK_PHASES[4].name
+        }
+      });
     }
   };
 
@@ -366,26 +516,112 @@ const FloatingWidget = () => {
       console.log('[DEBUG] Audio tracks:', stream.getAudioTracks());
       setAudioStream(stream);
 
-      // Create Deepgram client
-      console.log('[DEBUG] Creating Deepgram client with token:', token ? 'Token present' : 'No token');
-      const deepgram = createClient(token);
+      // Debug the token we received
+      console.log('[DEBUG] Creating Deepgram connection with token:', token ? 'Token present' : 'No token');
+      console.log('[DEBUG] Token length:', token ? token.length : 0);
+      console.log('[DEBUG] Token prefix:', token ? token.substring(0, 10) + '...' : 'N/A');
       
-      // Create live transcription connection with encoding specified
-      console.log('[DEBUG] Creating live transcription connection...');
-      const connection = deepgram.listen.live({
-        model: 'nova-2',
-        language: 'en-US',
-        smart_format: true,
-        interim_results: true,
-        punctuate: true,
-        encoding: 'webm-opus',  // Specify encoding for webm
-        sample_rate: 16000,     // Match our getUserMedia sample rate
-      });
+      // Validate token format
+      if (!token || token.length < 20) {
+        throw new Error(`Invalid token format. Length: ${token ? token.length : 0}`);
+      }
+      
+      // For browser environments, we need to use WebSocket directly with token in URL
+      // The SDK has issues with WebSocket authentication in browser environments
+      console.log('[DEBUG] Creating WebSocket connection directly (browser compatibility mode)...');
+      
+      // Build WebSocket URL with token as query parameter
+      const wsUrl = `wss://api.deepgram.com/v1/listen?` +
+        `token=${token}&` +
+        `model=nova-2&` +
+        `language=en-US&` +
+        `smart_format=true&` +
+        `interim_results=true&` +
+        `punctuate=true&` +
+        `encoding=linear16&` +  // Use linear16 for direct WebSocket
+        `sample_rate=16000`;
+      
+      console.log('[DEBUG] Connecting to WebSocket URL (token hidden):', wsUrl.replace(token, 'TOKEN_HIDDEN'));
+      
+      const ws = new WebSocket(wsUrl);
+      
+      // Create a connection-like object that mimics the SDK interface
+      const connection = {
+        ws: ws,
+        listeners: {},
+        getReadyState: () => ws.readyState,
+        send: (data) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(data);
+          }
+        },
+        finish: () => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.close(1000, 'Normal closure');
+          }
+        },
+        on: function(event, callback) {
+          if (!this.listeners[event]) {
+            this.listeners[event] = [];
+          }
+          this.listeners[event].push(callback);
+        },
+        emit: function(event, data) {
+          if (this.listeners[event]) {
+            this.listeners[event].forEach(cb => cb(data));
+          }
+        }
+      };
+      
+      // Wire up WebSocket events to our connection object
+      ws.onopen = () => {
+        console.log('[DEBUG] WebSocket opened successfully');
+        connection.emit('open');
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'Results' && data.channel) {
+            connection.emit('transcript', data);
+          } else if (data.type === 'Metadata') {
+            connection.emit('metadata', data);
+          }
+        } catch (e) {
+          console.error('[DEBUG] Error parsing message:', e);
+        }
+      };
+      
+      ws.onerror = (error) => {
+        console.error('[DEBUG] WebSocket error:', error);
+        connection.emit('error', error);
+      };
+      
+      ws.onclose = (event) => {
+        console.log('[DEBUG] WebSocket closed:', event.code, event.reason);
+        connection.emit('close', event.code, event.reason);
+      };
+      
+      console.log('[DEBUG] Connection wrapper created');
 
-      // Handle connection open
+      // Handle connection open - start recording when ready
       connection.on('open', () => {
         console.log('[DEBUG] Deepgram WebSocket connection opened');
         console.log('[DEBUG] Connection ready state:', connection.getReadyState());
+        
+        // Send a keep-alive immediately to prevent the connection from closing
+        // For direct WebSocket, we send an empty buffer
+        console.log('[DEBUG] Sending initial keep-alive');
+        connection.send(new ArrayBuffer(0));
+        
+        // Now start the audio processing since the connection is ready
+        if (mediaRecorder && mediaRecorder.state === 'inactive') {
+          console.log('[DEBUG] Starting audio processor now that connection is open...');
+          mediaRecorder.start();
+          console.log('[DEBUG] Audio processor started');
+        } else {
+          console.log('[DEBUG] Audio processor state:', mediaRecorder ? mediaRecorder.state : 'not created');
+        }
       });
 
       // Handle transcripts
@@ -399,10 +635,24 @@ const FloatingWidget = () => {
         console.log('[DEBUG] Deepgram metadata received:', metadata);
       });
 
-      // Handle errors
+      // Handle errors with more detail
       connection.on('error', (err) => {
         console.error('[DEBUG] Deepgram error:', err);
-        setError('Transcription error occurred');
+        console.error('[DEBUG] Error type:', typeof err);
+        console.error('[DEBUG] Error details:', JSON.stringify(err, null, 2));
+        
+        // Check if it's an authentication error
+        let errorMessage = 'Transcription error occurred';
+        if (err && err.message) {
+          if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+            errorMessage = 'Authentication failed. API key may be invalid.';
+          } else if (err.message.includes('403') || err.message.includes('Forbidden')) {
+            errorMessage = 'Access forbidden. API key may lack required permissions.';
+          } else {
+            errorMessage = 'Deepgram error: ' + err.message;
+          }
+        }
+        setError(errorMessage);
       });
 
       // Handle connection close
@@ -423,69 +673,83 @@ const FloatingWidget = () => {
       // Start media recorder to capture audio
       console.log('[DEBUG] Setting up MediaRecorder...');
       
-      // Check for supported MIME types
-      let mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/webm';
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-          mimeType = 'audio/ogg;codecs=opus';
-          if (!MediaRecorder.isTypeSupported(mimeType)) {
-            console.warn('[DEBUG] No optimal MIME type supported, using default');
-            mimeType = undefined; // Let browser choose
-          }
-        }
-      }
-      console.log('[DEBUG] Using MIME type:', mimeType || 'browser default');
+      // For linear16 encoding, we need to convert audio data
+      // First, let's use the AudioContext API to process audio
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
       
-      const recorderOptions = mimeType ? { mimeType } : {};
-      const recorder = new MediaRecorder(stream, recorderOptions);
-
-      let chunkCount = 0;
-      recorder.ondataavailable = async (event) => {
-        chunkCount++;
-        console.log(`[DEBUG] Audio chunk #${chunkCount} - Size: ${event.data.size} bytes, Ready state: ${connection.getReadyState()}`);
-        if (event.data.size > 0 && connection.getReadyState() === 1) {
-          // Send the blob directly - the SDK should handle it
+      let audioBuffer = [];
+      
+      processor.onaudioprocess = (e) => {
+        const inputData = e.inputBuffer.getChannelData(0);
+        // Convert float32 to int16 for linear16 encoding
+        const int16Data = new Int16Array(inputData.length);
+        for (let i = 0; i < inputData.length; i++) {
+          const s = Math.max(-1, Math.min(1, inputData[i]));
+          int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        audioBuffer.push(int16Data);
+        
+        // Send audio data every 100ms (approximately)
+        if (audioBuffer.length >= 4 && connection.getReadyState() === 1) {
+          // Combine buffers
+          const totalLength = audioBuffer.reduce((acc, arr) => acc + arr.length, 0);
+          const combinedBuffer = new Int16Array(totalLength);
+          let offset = 0;
+          for (const buffer of audioBuffer) {
+            combinedBuffer.set(buffer, offset);
+            offset += buffer.length;
+          }
+          
+          // Send as ArrayBuffer
           try {
-            // The Deepgram SDK expects the blob/data directly
-            connection.send(event.data);
-            console.log(`[DEBUG] Sent audio chunk #${chunkCount} to Deepgram (${event.data.size} bytes as Blob)`);
+            connection.send(combinedBuffer.buffer);
+            console.log(`[DEBUG] Sent ${combinedBuffer.buffer.byteLength} bytes of linear16 audio`);
           } catch (err) {
-            console.error(`[DEBUG] Error sending chunk #${chunkCount}:`, err);
+            console.error('[DEBUG] Error sending audio:', err);
           }
-        } else if (connection.getReadyState() !== 1) {
-          console.warn(`[DEBUG] Cannot send audio - WebSocket not ready. State: ${connection.getReadyState()}`);
-          // Stop recording if connection is closed
-          if (connection.getReadyState() === 3 && recorder.state !== 'inactive') {
-            console.log('[DEBUG] Stopping recorder - connection closed');
-            recorder.stop();
-          }
+          
+          // Clear buffer
+          audioBuffer = [];
+        }
+      };
+      
+      // Connect audio nodes
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+      
+      // Store references for cleanup
+      const audioNodes = { audioContext, source, processor };
+      
+      // Create a dummy recorder object for compatibility
+      const recorder = {
+        state: 'inactive',
+        start: () => {
+          console.log('[DEBUG] Starting audio processing');
+          recorder.state = 'recording';
+          audioContext.resume();
+        },
+        stop: () => {
+          console.log('[DEBUG] Stopping audio processing');
+          recorder.state = 'inactive';
+          source.disconnect();
+          processor.disconnect();
+          audioContext.close();
         }
       };
 
-      recorder.onerror = (error) => {
-        console.error('[DEBUG] MediaRecorder error:', error);
-      };
 
-      recorder.onstart = () => {
-        console.log('[DEBUG] MediaRecorder started');
-      };
-
-      recorder.onstop = () => {
-        console.log('[DEBUG] MediaRecorder stopped');
-      };
-
-      console.log('[DEBUG] Starting MediaRecorder with 250ms chunks...');
-      recorder.start(250); // Send audio chunks every 250ms
+      // Store the recorder but don't start it yet
       setMediaRecorder(recorder);
+      console.log('[DEBUG] MediaRecorder created and stored, will start when connection opens');
       setDeepgramConnection(connection);
 
       // Set up keepalive to prevent connection timeout
       const keepAliveInterval = setInterval(() => {
         if (connection.getReadyState() === 1) {
           // Send a keep-alive message (empty buffer)
-          const keepAlive = new ArrayBuffer(0);
-          connection.send(keepAlive);
+          connection.send(new ArrayBuffer(0));
           console.log('[DEBUG] Sent keepalive to Deepgram');
         } else {
           console.log('[DEBUG] Stopping keepalive - connection not ready');
@@ -770,7 +1034,7 @@ const FloatingWidget = () => {
           </div>
         </div>
       ) : (
-        // Expanded View  
+        // Expanded View with two-panel layout
         <div className="widget-expanded">
           <div className="widget-header expanded-header">
             <div className="widget-logo">Zeroscript</div>
@@ -778,13 +1042,20 @@ const FloatingWidget = () => {
               <span className="minimize-icon">−</span>
             </button>
           </div>
-          <DynamicStatusBar status={currentStatus} />
-          <div className="widget-body">
-            <div className="widget-content-wrapper">
-              <ScriptWindow 
-                scriptText={currentScript || (showSampleScript ? "Hello! Thank you for calling. How can I assist you today?" : "")} 
-                mode='script'
-              />
+          <div className="widget-panels">
+            <ObjectionsPanel 
+              onObjectionSelect={handleObjectionSelect}
+              activeObjection={selectedObjection}
+            />
+            <div className="main-panel">
+              <DynamicStatusBar status={currentStatus} />
+              <div className="widget-body">
+                <div className="widget-content-wrapper">
+                  <ScriptWindow 
+                    scriptText={currentScript || PLAYBOOK_PHASES[currentPhase].script} 
+                    mode={isDiagnosing ? 'diagnosis' : 'script'}
+                    onDiagnosisAnswer={isDiagnosing ? handleDiagnosisAnswer : null}
+                  />
                 {error && (
                   <div className="error-message">
                     <div className="error-text">{error}</div>
@@ -808,42 +1079,61 @@ const FloatingWidget = () => {
                     )}
                   </div>
                 )}
-                <div className="widget-controls">
-                  {isDiagnosing ? (
-                    <div className="diagnosis-buttons-container">
-                      <button 
-                        className="diagnosis-button diagnosis-yes"
-                        onClick={() => handleDiagnosisAnswer(true)}
-                      >
-                        {showingResponse ? '[ Continue ]' : '[ Yes ]'}
-                      </button>
-                      {!showingResponse && (
+                  <div className="widget-controls">
+                    {isDiagnosing && (
+                      <div className="diagnosis-controls">
+                        <div className="diagnosis-buttons-row">
+                          <button 
+                            className="diagnosis-button diagnosis-yes"
+                            onClick={() => handleDiagnosisAnswer(true)}
+                          >
+                            {showingResponse ? '[ Continue ]' : '[ Yes ]'}
+                          </button>
+                          {!showingResponse && (
+                            <button 
+                              className="diagnosis-button diagnosis-no"
+                              onClick={() => handleDiagnosisAnswer(false)}
+                            >
+                              [ No ]
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {!isDiagnosing && (
+                      <div className="phase-navigation">
                         <button 
-                          className="diagnosis-button diagnosis-no"
-                          onClick={() => handleDiagnosisAnswer(false)}
+                          className="nav-button nav-back"
+                          onClick={handlePreviousPhase}
+                          disabled={currentPhase === 0}
                         >
-                          [ No ]
+                          ← Back
                         </button>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="control-buttons">
+                        <span className="phase-indicator">
+                          Phase {currentPhase + 1} of 6: {PLAYBOOK_PHASES[currentPhase].name}
+                        </span>
+                        <button 
+                          className="nav-button nav-next"
+                          onClick={handleNextPhase}
+                          disabled={currentPhase === 5}
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    )}
+                    
+                    {showObjectionRebuttal && (
                       <button 
-                        className={`call-button ${isCallActive ? 'end-call' : 'start-call'}`}
-                        onClick={isCallActive ? endCall : startCall}
-                        disabled={isProcessingScript}
+                        className="return-to-script-button"
+                        onClick={() => handleObjectionSelect(selectedObjection)}
                       >
-                        {isCallActive ? 'End Call' : 'Start Call'}
+                        Return to Main Script
                       </button>
-                      <button 
-                        className="diagnosis-trigger-button"
-                        onClick={handleStartDiagnosis}
-                      >
-                        Start Credit Diagnosis
-                      </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
+              </div>
             </div>
           </div>
         </div>

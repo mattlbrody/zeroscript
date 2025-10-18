@@ -3,27 +3,13 @@ import './ScriptWindow.css';
 
 function ScriptWindow({ scriptText, mode = 'script', onDiagnosisAnswer }) {
   const renderContent = () => {
+    // In diagnosis mode, just show the question text without buttons
+    // (buttons are now in the widget controls area)
     if (mode === 'diagnosis') {
       return (
-        <>
-          <div className="script-text diagnosis-question">
-            {scriptText}
-          </div>
-          <div className="diagnosis-buttons-container">
-            <button 
-              className="diagnosis-button diagnosis-yes"
-              onClick={() => onDiagnosisAnswer(true)}
-            >
-              [ Yes ]
-            </button>
-            <button 
-              className="diagnosis-button diagnosis-no"
-              onClick={() => onDiagnosisAnswer(false)}
-            >
-              [ No ]
-            </button>
-          </div>
-        </>
+        <div className="script-text diagnosis-question">
+          {scriptText}
+        </div>
       );
     }
     
